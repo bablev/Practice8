@@ -2,67 +2,61 @@ from openpyxl import load_workbook
 from docx import Document
 import datetime
 
+
 def main():
-    companies_data = {}
+    company_data = {}
+    data = {}
+    number = 1
     template = 'temp.docx'
     result = 'result.docx'
     wb = load_workbook('data_isukk_8.xlsx', data_only=True)
-    ws = wb['27.03.2022']
-    colB = ws['B']
-    for val in colB:
-        if val.value == 'Грузополучатель':
-            continue
-        if val.value not in companies_data:
-            companies_data[val.value] = {'Contracts': {'Contract1': {}, 'Contract2': {}, 'Contract3': {}},
-                                         'Information': {'{{SENDER}}': None, '{{RECEIVER}}': None, '{{REASON}}' : None, '{{DATE}}' :  None}}
+    ws = wb.sheetnames
+    for sheet in ws:
+        for row in wb[sheet].iter_rows(min_row=2, max_row=wb[sheet].max_row, values_only=True):
+            company_data[row[1]] = [row[0], row[2]]
+            data[row[1]] = []
 
-    for row in ws.iter_rows(min_row=3, values_only=True):
-        sender = row[0]
-        company = row[1]
-        reason = row[2]
-        product = row[3]
-        unit = row[4]
-        price = row[5]
-        count = row[6]
-        summa = row[7]
-        if (len(companies_data[company]['Contracts']['Contract1']) == 0):
-            companies_data[company]['Information']['{{SENDER}}'] = sender
-            companies_data[company]['Information']['{{RECEIVER}}'] = company
-            companies_data[company]['Contracts']['Contract1']['{{PRODUCT}}'] = product
-            companies_data[company]['Contracts']['Contract1']['{{UNIT}}'] = unit
-            companies_data[company]['Contracts']['Contract1']['{{PRICE}}'] = price
-            companies_data[company]['Contracts']['Contract1']['{{COUNT}}'] = count
-            companies_data[company]['Contracts']['Contract1']['{{SUMM}}'] = summa
-            companies_data[company]['Information']['{{REASON}}'] = reason
-            continue
+        for sender, receiver, reason, product, unit, price, amount, summ in wb[sheet]:
+            for key, value in data.items():
+                if receiver.value == key:
+                    value.append([product.value, unit.value, price.value, amount.value, summ.value])
 
-        elif (len(companies_data[company]['Contracts']['Contract2']) == 0):
-            companies_data[company]['Information']['SENDER'] = sender
-            companies_data[company]['Information']['RECEIVER'] = company
-            companies_data[company]['Contracts']['Contract2']['PRODUCT'] = product
-            companies_data[company]['Contracts']['Contract2']['UNIT'] = unit
-            companies_data[company]['Contracts']['Contract2']['PRICE'] = price
-            companies_data[company]['Contracts']['Contract2']['COUNT'] = count
-            companies_data[company]['Contracts']['Contract2']['SUMM'] = summa
-            companies_data[company]['Information']['REASON'] = reason
+    print(data)
+    for key, value in data.items():
+        template_doc = Document(template)
+        total_items = 0
+        total_sum = 0
+        for table in template_doc.tables:
+            counter = 1
+            for lists in value:
+                counter2 = 0
+                row_cells = table.add_row().cells
+                row_cells[0].text = str(counter)
+                counter += 1
+                for val in lists:
+                    if counter2 == 3:
+                        total_items += val
+                    elif counter2 == 4:
+                        total_sum += val
+                    counter2 += 1
+                    row_cells[counter2].text = str(val)
 
-        else:
-            companies_data[company]['Information']['SENDER'] = sender
-            companies_data[company]['RECEIVER'] = company
-            companies_data[company]['Contracts']['Contract3']['PRODUCT'] = product
-            companies_data[company]['Contracts']['Contract3']['UNIT'] = unit
-            companies_data[company]['Contracts']['Contract3']['PRICE'] = price
-            companies_data[company]['Contracts']['Contract3']['COUNT'] = count
-            companies_data[company]['Contracts']['Contract3']['SUMM'] = summa
-            companies_data[company]['Information']['REASON'] = reason
 
-    template_doc = Document(template)
-    for comp in companies_data:
-        for key, value in companies_data[comp]['Information'].items():
-            for paragraph in template_doc.paragraphs:
-                replace_text(paragraph, key, value)
+        for key1, value1 in company_data.items():
+            basic_inf = {}
+            basic_inf['{{NUMBER}}'] = number
+            basic_inf['{{DATE}}'] = str(datetime.datetime.now().date())
+            basic_inf['{{SENDER}}'] = value1[0]
+            basic_inf['{{RECEIVER}}'] = key1
+            basic_inf['{{REASON}}'] = value1[1]
+            basic_inf['{{TOTALNUMBEROFPRODUCTS}}'] = total_items
+            basic_inf['{{TOTALSUM}}'] = total_sum
+            for key2, value2 in basic_inf.items():
+                 for paragraph in template_doc.paragraphs:
+                    replace_text(paragraph, key2, str(value2))
 
-    template_doc.save(result)
+        template_doc.save(f'накладная_{number}_{key}.docx')
+        number += 1
 
 
 def replace_text(paragraph, key, value):
